@@ -6,9 +6,10 @@ const {
   curry,
   alt,
   tap,
-  chain
+  chain,
+  bimap
 } = require('crocks')
-const { head, trim, toString, prop, objOf, converge, mergeAll, concat, invoker, pathr, path, flip, construct, unapply, pathEq, filter, allPass, both, reduce, propEq, K } = require('ramda')
+const { head, trim, toString, prop, objOf, converge, mergeAll, concat, invoker, pathr, path, flip, construct, unapply, pathEq, filter, allPass, both, reduce, propEq, always: K, ifElse, isEmpty } = require('ramda')
 const { JSDOM } = require('jsdom')
 const axios = require('axios')
 const fs = require('fs')
@@ -21,9 +22,12 @@ const hash = string => crypto.createHash('md5').update(string).digest("hex")
 
 // readFile :: string -> Async e string
 const readFile = name => Async((rej, res) => {
-  fs.readFile(name, 'utf8', (err, cont) => err ? rej(err) : res(cont))
+  fs.readFile(name, 'utf8', (err, cont) => {
+    return err ? rej(err) : res(cont)
+  })
 })
 
+// writeFile :: string -> {} -> Async e {}
 const writeFile = curry(
   (name, data) => Async((rej, res) => {
     fs.writeFile(name, data, 'utf8', (err) => err ? rej(err) : res(data))
@@ -36,17 +40,20 @@ const getUrl = url =>
   readFile(`${hash(url)}.html`)
     .alt(
       httpGet(url)
-      .chain(
+      .chain( res =>
         compose(
           writeFile(`./${hash(url)}.html`),
           prop('data'),
-        )
+        )(res)
       ),
     )
 
 const generateDOM = construct(JSDOM)
-const tapLog = curry((label, data) =>
-  (console.log(`${label}: ${JSON.stringify(data, null, ' ')}`)))
+const tapLog = curry(
+  (label, data) => tap(_=>{
+    console.log(`${label}: ${JSON.stringify(data, null, ' ')}`)
+  })(data)
+)
 
 const log = compose(
   console.log,
@@ -168,9 +175,11 @@ const extractUniMelbData = converge(
   ] 
 )
 
-const dbEntryMatchBody = table => Async.fromPromise(
+// dbEntryMatchHtml :: string -> html -> {}
+const dbEntryMatchHtml = table => Async.fromPromise(
   html => {
-    return knex(table).where({ html: html.html }).select('id')
+    return knex(table).where({ html: html }).select('id')
+     // .then(tapLog('ok promise'), tapLog(`error promise for html ${html}`))
   }
 )
 
@@ -185,47 +194,76 @@ const dbInsertToTable = table => Async.fromPromise(
 //    return knex(table).insert(data).then(_ => data)
 //  }
 //)
+const parsePage = compose(
+  extractUniMelbData,
+  stringToDoc,
+)
 
+// get data -> save to db if not present 
 getUrl(DOMAIN + '/all')
 // Async e string -> Async e [String]
   .map(extractEventsUri)
 // Async e [String] -> Async e [Async e {}]
   .map(
+
     // [String] -> Async e {}
     map(uri => compose(
-      chain(domString => compose(
-        // {} -> Async
-        
-        chain(x => {
-          debugger;
-          if (x.lenght === 0) {
-            return dbInsertToTable('uniMelb')
-          }
-          else {
-            return Async.of('Already saved')
-          }
-        }),
-        dbEntryMatchBody('uniMelb'),
-        // {} -> {}
-        scrappedData => ({
-          url: uri,
-          data: scrappedData,
-          html: domString 
-        }),
-        // DOM -> {}
-        extractUniMelbData,
-        // String -> DOM
-        stringToDoc
-      )(domString)),
+      // chain(domString => compose(
+      //   // {} -> Async
+      //   chain(x => {
+      //     console.log(x)
+      //     debugger
+      //     if (x.lenght === 0) {
+      //       return dbInsertToTable('uniMelb')(x)
+      //     }
+      //     else {
+      //       return Async.of('Already saved')
+      //     }
+      //   }),
+      //   dbEntryMatchHtml('uniMelb'),
+      //   // {} -> {}
+      //   scrappedData => ({
+      //     url: uri,
+      //     data: scrappedData,
+      //     html: domString 
+      //   }),
+      //   // DOM -> {}
+      //   extractUniMelbData,
+      //   // String -> DOM
+      //   stringToDoc,
+      // )(domString)),
+      // Async e string -> Async e []
+      chain(page => {
+        return dbEntryMatchHtml('uniMelb')(page)
+          .chain(ifElse(
+            // knex return emtpy array if no found
+            isEmpty,
+            // if not in db flow. Parse page then insert and return 
+            K(compose(
+              map(K(`Saved to DB ${uri.slice(0, 20)}`)),
+              dbInsertToTable('uniMelb'),
+              scrappedData => ({
+                url: uri,
+                data: scrappedData,
+                html: page 
+              }),
+              // x => {debugger; return x},
+              parsePage,
+            )(page)),
+            K(Async.of(`${uri.slice(0, 20)} is already saved in db`))
+          ))
+      }
+      ),
       // String -> Async
       getUrl,
       // String -> String
-      concat(DOMAIN)
+      concat(DOMAIN),
     )(uri)
     )
   )
+//.map(x => {debugger; return x})
   .chain(Async.all)
 // .map(x => JSON.stringify(x, null, ' '))
 // .chain(writeFile('./output.json'))
-  .fork(tapLog('error'), log)
+  .fork(tapLog('error'), compose( () => process.exit(), log))
 
