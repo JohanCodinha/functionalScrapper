@@ -9,7 +9,7 @@ const {
   chain,
   bimap
 } = require('crocks')
-const { head, trim, toString, prop, objOf, converge, mergeAll, concat, invoker, pathr, path, flip, construct, unapply, pathEq, filter, allPass, both, reduce, propEq, always: K, ifElse, isEmpty } = require('ramda')
+const { head, trim, toString, prop, objOf, converge, mergeAll, concat, invoker, pathr, path, flip, construct, unapply, pathEq, filter, allPass, both, reduce, propEq, always: K, ifElse, isEmpty, propOr } = require('ramda')
 const { JSDOM } = require('jsdom')
 const axios = require('axios')
 const fs = require('fs')
@@ -87,7 +87,7 @@ const extractTitle = compose(
 )
 const extractType = compose(
   objOf('type'),
-  prop('textContent'),
+  propOr('unknown content', 'textContent'),
   $('div.upper.ribbon-wrapper h2')
 )
 
@@ -178,8 +178,12 @@ const extractUniMelbData = converge(
 // dbEntryMatchHtml :: string -> html -> {}
 const dbEntryMatchHtml = table => Async.fromPromise(
   html => {
-    return knex(table).where({ html: html }).select('id')
-     // .then(tapLog('ok promise'), tapLog(`error promise for html ${html}`))
+    const data = parsePage(html)
+    return knex(table).where({ data }).select('id')
+     // .then(
+     //   x => {console.log(data, x[0].data);debugger; return x},
+     //   x => {console.log(data, table, html, x[0].data);debugger; return x})
+    // tapLog('error db entry'))
   }
 )
 
@@ -264,6 +268,5 @@ getUrl(DOMAIN + '/all')
 //.map(x => {debugger; return x})
   .chain(Async.all)
 // .map(x => JSON.stringify(x, null, ' '))
-// .chain(writeFile('./output.json'))
   .fork(tapLog('error'), compose( () => process.exit(), log))
 
