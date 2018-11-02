@@ -6,7 +6,7 @@ exports.up = function(knex, Promise) {
     t.text('html').notNullable()
     t.jsonb('data')
     t.timestamps(false, true)
-    t.index(['data'], 'hash')
+//    t.index(['data'], 'hash')
   })  
 };
 

@@ -7,9 +7,11 @@ const {
   alt,
   tap,
   chain,
-  bimap
+  bimap,
+  tryCatch,
+  resultToAsync,
 } = require('crocks')
-const { head, trim, toString, prop, objOf, converge, mergeAll, concat, invoker, pathr, path, flip, construct, unapply, pathEq, filter, allPass, both, reduce, propEq, always: K, ifElse, isEmpty, propOr } = require('ramda')
+const { head, trim, toString, prop, objOf, converge, mergeAll, concat, invoker, pathr, path, flip, construct, unapply, pathEq, filter, allPass, both, reduce, propEq, always: K, ifElse, isEmpty, propOr, merge } = require('ramda')
 const { JSDOM } = require('jsdom')
 const axios = require('axios')
 const fs = require('fs')
@@ -34,7 +36,7 @@ const writeFile = curry(
   })
 )
 
-const httpGet = url => Async((rej, res) => axios.get(url).then(res, res))
+const httpGet = url => Async((rej, res) => axios.get(url).then(res, res)).map(prop('data'))
 
 const getUrl = url =>
   readFile(`${hash(url)}.html`)
@@ -49,6 +51,7 @@ const getUrl = url =>
     )
 
 const generateDOM = construct(JSDOM)
+
 const tapLog = curry(
   (label, data) => tap(_=>{
     console.log(`${label}: ${JSON.stringify(data, null, ' ')}`)
@@ -70,14 +73,19 @@ const $ = query => compose(
   invoker(1, 'querySelector')(query)
 )
 
-const document = path(['window', 'document'])
+const getDocument = path(['window', 'document'])
+
+// stringToDoc :: String -> DOM
+const stringToDoc = compose(
+  getDocument,
+  generateDOM,
+)
 
 const extractEventsUri = compose(
   map(prop('href')),
   map($('ul li a.col.ribbon-wrapper')),
   $$('.event-listing > li'),
-  document,
-  generateDOM
+  stringToDoc 
 )
 
 const extractTitle = compose(
@@ -153,11 +161,7 @@ const extractLocation = compose(
   $('div.lower div.aside')
 )
 
-// stringToDoc :: String -> DOM
-const stringToDoc = compose(
-  document,
-  generateDOM,
-)
+
 
 const DOMAIN = 'https://events.unimelb.edu.au'
 const extractUniMelbData = converge(
@@ -175,98 +179,59 @@ const extractUniMelbData = converge(
   ] 
 )
 
-// dbEntryMatchHtml :: string -> html -> {}
-const dbEntryMatchHtml = table => Async.fromPromise(
-  html => {
-    const data = parsePage(html)
-    return knex(table).where({ data }).select('id')
-     // .then(
-     //   x => {console.log(data, x[0].data);debugger; return x},
-     //   x => {console.log(data, table, html, x[0].data);debugger; return x})
-    // tapLog('error db entry'))
-  }
+// dbEntryMatchJson :: string -> html -> {}
+const dbEntryMatchJson = table => Async.fromPromise(
+  parsedPage => knex(table).where({ data: parsedPage })
+  //.select('id', 'data')
+   //.then(
+   //  x => {console.log(parsedPage, x[0].data);debugger; return x},
+   //  x => {console.log(parsedPage, x[0].data);debugger; return x})
+ 
 )
 
+// dbInsertToTable :: string -> {} -> {}
 const dbInsertToTable = table => Async.fromPromise(
-  data => {
-    return knex(table).insert(data).then(K(data))
-  })
+  data => knex(table).insert(data).then(K(data))
+)
 
-//const dbInsertToTable = table => Async.fromPromise(
-//  (data) => {
-//    //console.log(data, table)
-//    return knex(table).insert(data).then(_ => data)
-//  }
-//)
-const parsePage = compose(
+// parsePage :: html -> Result e {}
+const parsePage = tryCatch(compose(
   extractUniMelbData,
   stringToDoc,
-)
+))
 
-// get data -> save to db if not present 
-getUrl(DOMAIN + '/all')
+httpGet(DOMAIN + '/all')
 // Async e string -> Async e [String]
   .map(extractEventsUri)
+  .map(map(concat(DOMAIN)))
 // Async e [String] -> Async e [Async e {}]
   .map(
-
-    // [String] -> Async e {}
-    map(uri => compose(
-      // chain(domString => compose(
-      //   // {} -> Async
-      //   chain(x => {
-      //     console.log(x)
-      //     debugger
-      //     if (x.lenght === 0) {
-      //       return dbInsertToTable('uniMelb')(x)
-      //     }
-      //     else {
-      //       return Async.of('Already saved')
-      //     }
-      //   }),
-      //   dbEntryMatchHtml('uniMelb'),
-      //   // {} -> {}
-      //   scrappedData => ({
-      //     url: uri,
-      //     data: scrappedData,
-      //     html: domString 
-      //   }),
-      //   // DOM -> {}
-      //   extractUniMelbData,
-      //   // String -> DOM
-      //   stringToDoc,
-      // )(domString)),
-      // Async e string -> Async e []
-      chain(page => {
-        return dbEntryMatchHtml('uniMelb')(page)
-          .chain(ifElse(
-            // knex return emtpy array if no found
-            isEmpty,
-            // if not in db flow. Parse page then insert and return 
-            K(compose(
-              map(K(`Saved to DB ${uri.slice(0, 20)}`)),
-              dbInsertToTable('uniMelb'),
-              scrappedData => ({
-                url: uri,
-                data: scrappedData,
-                html: page 
-              }),
-              // x => {debugger; return x},
-              parsePage,
-            )(page)),
-            K(Async.of(`${uri.slice(0, 20)} is already saved in db`))
-          ))
+    map(url => httpGet(url)
+      .chain(pageHtml => {
+        return resultToAsync(parsePage(pageHtml))
+          .chain(parsedPage=> dbEntryMatchJson('uniMelb')(parsedPage)
+            .chain(ifElse(
+              // knex return emtpy array if no found
+              isEmpty,
+              // if not in db flow. Parse page then insert and return 
+              compose(
+                map(K(`Saved to DB ${url.slice(0, 20)}`)),
+                dbInsertToTable('uniMelb'),
+                K({
+                  url,
+                  data: parsedPage,
+                  html: pageHtml 
+                })
+              ),
+              K(Async.of(`${url.slice(0, 20)} is already saved in db`))
+            ))
+          )
       }
-      ),
-      // String -> Async
-      getUrl,
-      // String -> String
-      concat(DOMAIN),
-    )(uri)
+      )
+      )
     )
-  )
-//.map(x => {debugger; return x})
-  .chain(Async.all)
-// .map(x => JSON.stringify(x, null, ' '))
-  .fork(tapLog('error'), compose( () => process.exit(), log))
+    //.map(x => {debugger; return x})
+    .chain(Async.all)
+    // .map(x => JSON.stringify(x, null, ' '))
+    .fork(tapLog('error'), compose( () => process.exit(), log))
 
