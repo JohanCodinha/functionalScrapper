@@ -38,7 +38,3 @@ config
 
 # saved html file
 *.html
-
-# Dockerfile
-Dockerfile
-.dockerignore

@@ -1,11 +1,11 @@
 {
   "name": "scrapper",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "main.js",
   "license": "MIT",
   "dependencies": {
     "axios": "^0.18.0",
-    "crocks": "^0.11.0",
+    "crocks": "^0.11.1",
     "date-fns": "^1.29.0",
     "jsdom": "^13.0.0",
     "knex": "^0.15.2",
