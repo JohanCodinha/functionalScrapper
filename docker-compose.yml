@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  postgres:
+    build: database
+    env_file:
+      - postgres_secrets.env
+    volumes:
+      - database:/var/lib/postgresql/data
+  
+  scrapper:
+    build: scrapper
+    environment:
+      - POSTGRES_HOST=postgres
+    env_file:
+      - postgres_secrets.env
+    depends_on:
+      - postgres
+
+volumes:
+  database:

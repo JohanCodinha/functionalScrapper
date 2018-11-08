@@ -13,7 +13,7 @@
     "ramda": "^0.25.0"
   },
   "scripts": {
-    "rollback": "cd db/ && knex migrate:rollback",
-    "latest": "cd db/ && knex migrate:latest"
+    "rollback": "cd src/db/ && knex migrate:rollback",
+    "latest": "cd src/db/ && knex migrate:latest"
   }
 }
