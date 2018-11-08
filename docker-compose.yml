@@ -3,6 +3,8 @@ version: '3'
 services:
   postgres:
     build: database
+    image: panelvw/scrapper-postgresql
+    container_name: scrapper-postgresql
     env_file:
       - postgres_secrets.env
     volumes:
@@ -10,6 +12,8 @@ services:
   
   scrapper:
     build: scrapper
+    image: panelvw/scrapper-nodejs
+    container_name: scrapper-nodejs
     environment:
       - POSTGRES_HOST=postgres
     env_file:
