@@ -40,5 +40,5 @@ config
 *.html
 
 # Dockerfile
-Dockerfile
-.dockerignore
+#Dockerfile
+#.dockerignore
