@@ -4,6 +4,7 @@ services:
   postgres:
     build: database
     image: panelvw/scrapper-postgresql
+    restart: always
     container_name: scrapper-postgresql
     env_file:
       - postgres_secrets.env
@@ -12,8 +13,9 @@ services:
   
   scrapper:
     build: scrapper
-    image: panelvw/scrapper-nodejs
-    container_name: scrapper-nodejs
+    image: panelvw/scrapper-postgresql
+    restart: always
+    container_name: nodejs
     environment:
       - POSTGRES_HOST=postgres
     env_file:
