@@ -13,7 +13,7 @@ services:
   
   scrapper:
     build: scrapper
-    image: panelvw/scrapper-postgresql
+    image: panelvw/scrapper-nodejs
     restart: always
     container_name: nodejs
     environment:
@@ -22,6 +22,17 @@ services:
       - postgres_secrets.env
     depends_on:
       - postgres
+
+  pgadmin:
+    image: dpage/pgadmin4
+    depends_on:
+      - postgres
+    ports:
+      - "5555:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin
+      PGADMIN_DEFAULT_PASSWORD: admin
+      restart: unless-stopped
 
 volumes:
   database:
