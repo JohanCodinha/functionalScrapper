@@ -22,6 +22,8 @@ services:
       - postgres_secrets.env
     depends_on:
       - postgres
+    volumes:
+      - scrapperLog:/var/log/scrapper/
 
   pgadmin:
     image: dpage/pgadmin4
@@ -33,6 +35,10 @@ services:
       PGADMIN_DEFAULT_EMAIL: admin
       PGADMIN_DEFAULT_PASSWORD: admin
       restart: unless-stopped
+    volumes:
+      - pgadmin:/root/.pgadmin
 
 volumes:
   database:
+  pgadmin:
+  scrapperLog:
