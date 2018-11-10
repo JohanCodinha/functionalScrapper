@@ -10,6 +10,7 @@ COPY . .
 
 RUN echo "0 * * * * . /tmp/docker.env; run-parts /etc/periodic/hourly" > /var/spool/cron/crontabs/root \
     && mv scrap /etc/periodic/hourly \
+    && mkdir /var/log/scrapper/ \
     && touch /var/log/scrapper/scrapper.log \
     && npm install
 
