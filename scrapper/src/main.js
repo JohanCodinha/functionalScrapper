@@ -10,6 +10,7 @@ const {
   bimap,
   tryCatch,
   resultToAsync,
+  identity
 } = require('crocks')
 const { head, trim, toString, prop, objOf, converge, mergeAll, concat, invoker, pathr, path, flip, construct, unapply, pathEq, filter, allPass, both, reduce, propEq, always: K, ifElse, isEmpty, propOr, merge } = require('ramda')
 const { JSDOM } = require('jsdom')
@@ -182,11 +183,6 @@ const extractUniMelbData = converge(
 // dbEntryMatchJson :: string -> html -> {}
 const dbEntryMatchJson = table => Async.fromPromise(
   parsedPage => knex(table).where({ data: parsedPage })
-  //.select('id', 'data')
-   //.then(
-   //  x => {console.log(parsedPage, x[0].data);debugger; return x},
-   //  x => {console.log(parsedPage, x[0].data);debugger; return x})
- 
 )
 
 // dbInsertToTable :: string -> {} -> {}
@@ -207,31 +203,31 @@ httpGet(DOMAIN + '/all')
 // Async e [String] -> Async e [Async e {}]
   .map(
     map(url => httpGet(url)
-      .chain(pageHtml => {
-        return resultToAsync(parsePage(pageHtml))
-          .chain(parsedPage=> dbEntryMatchJson('uniMelb')(parsedPage)
-            .chain(ifElse(
-              // knex return emtpy array if no found
-              isEmpty,
-              // if not in db flow. Parse page then insert and return 
-              compose(
-                map(K(`Saved to DB ${url.slice(0, 20)}`)),
-                dbInsertToTable('uniMelb'),
-                K({
-                  url,
-                  data: parsedPage,
-                  html: pageHtml 
-                })
-              ),
-              K(Async.of(`${url.slice(0, 20)} is already saved in db`))
-            ))
-          )
-      }
-      )
+      .chain(pageHtml => resultToAsync(parsePage(pageHtml))
+        .chain(parsedPage => dbEntryMatchJson('uniMelb')(parsedPage)
+          .bimap(error => ({error, message: "couldn't connect to db"}), identity)
+          .chain(ifElse(
+            // knex return emtpy array if no found
+            isEmpty,
+            // if not in db flow. Parse page then insert and return 
+            compose(
+              map(data => ({ status: 'saved', url, data })),
+              dbInsertToTable('uniMelb'),
+              K({
+                url,
+                data: parsedPage,
+                html: pageHtml 
+              })
+            ),
+            K(Async.of(`${url} is already saved in db`))
+          ))
+        )
       )
     )
-    //.map(x => {debugger; return x})
-    .chain(Async.all)
-    // .map(x => JSON.stringify(x, null, ' '))
-    .fork(tapLog('error'), compose( () => process.exit(), log))
+  )
+
+//.map(x => {debugger; return x})
+  .chain(Async.all)
+// .map(x => JSON.stringify(x, null, ' '))
+  .fork(tapLog('error'), compose( () => process.exit(), log))
 
