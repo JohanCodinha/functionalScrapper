@@ -10,10 +10,18 @@
     "jsdom": "^13.0.0",
     "knex": "^0.15.2",
     "pg": "^7.6.0",
-    "ramda": "^0.25.0"
+    "ramda": "^0.26.0"
   },
   "scripts": {
     "rollback": "cd src/db/ && knex migrate:rollback",
     "latest": "cd src/db/ && knex migrate:latest"
+  },
+  "devDependencies": {
+    "eslint": "^5.9.0",
+    "eslint-config-standard": "^12.0.0",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-node": "^8.0.0",
+    "eslint-plugin-promise": "^4.0.1",
+    "eslint-plugin-standard": "^4.0.0"
   }
 }
