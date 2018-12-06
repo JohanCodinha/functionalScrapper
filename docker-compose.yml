@@ -2,8 +2,7 @@ version: '3'
 
 services:
   postgres:
-    build: database
-    image: panelvw/scrapper-postgresql
+    image:  postgres 
     restart: always
     container_name: scrapper-postgresql
     env_file:
@@ -13,17 +12,20 @@ services:
   
   scrapper:
     build: scrapper
-    image: panelvw/scrapper-nodejs
     restart: always
     container_name: nodejs
     environment:
       - POSTGRES_HOST=postgres
+    ports:
+      - "9229:9229"
     env_file:
       - postgres_secrets.env
     depends_on:
       - postgres
     volumes:
       - scrapperLog:/var/log/scrapper/
+      - ./scrapper:/opt/scrapper
+
 
   pgadmin:
     image: dpage/pgadmin4
@@ -32,9 +34,9 @@ services:
     ports:
       - "5555:80"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin
-      PGADMIN_DEFAULT_PASSWORD: admin
-      restart: unless-stopped
+      - PGADMIN_DEFAULT_EMAIL=admin
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    restart: unless-stopped
     volumes:
       - pgadmin:/root/.pgadmin
 

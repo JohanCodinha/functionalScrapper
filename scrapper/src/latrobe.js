@@ -24,7 +24,9 @@ const {
   mergeLeft,
   toLower,
   or,
-  pipe
+  pipe,
+  ifElse,
+  identity
 } = require('ramda')
 
 const {
@@ -36,7 +38,8 @@ const {
   //either,
   //option,
   find,
-  safe
+  safe,
+  bimap
 } = require('crocks')
 
 const {
@@ -54,6 +57,11 @@ const {
   stringToDoc,
   httpGetCached
 } = require('./helper')
+
+const {
+  dbEntryMatchJson,
+  dbInsertToTable
+} = require('./db/utils')
 
 const extractNextPageURL = compose(
   mprop('href'),
@@ -97,7 +105,7 @@ const extractTitle = compose(
   $('h1')
 )
 
-const extractsubHeading = compose(
+const extractSubHeading = compose(
   map(objOf('subHeading')),
   chain(safe(complement(isEmpty))),
   map(trim),
@@ -147,9 +155,9 @@ const extractPageData = extractFns => page =>
   extractFns.reduce((acc, item) => mergeLeft(acc, item(page).option({})), {})
 
 const extractEventsData = getEventsURL('http://www.latrobe.edu.au/events/search-events')
-  .map(map(url => httpGetCached(url)
-    .map(compose(
-      mergeLeft({url}),
+  .map(map(uri => httpGetCached(uri)
+    .map(html => pipe(
+      stringToDoc,
       extractPageData(
         [
           extractMetaTag('Location'),
@@ -161,17 +169,32 @@ const extractEventsData = getEventsURL('http://www.latrobe.edu.au/events/search-
           extractMetaTag('audience'),
           extractMetaTag('author'),
           extractTitle,
-          extractsubHeading,
+          extractSubHeading,
           extractImage,
           extractDates
         ]
       ),
-      stringToDoc
-    ))
+      objOf('data'),
+      mergeLeft({html, uri})
+    )(html))
   ))
   .chain(Async.all)
 
 extractEventsData
+  // .map(x => {debugger; return x})
+  .map(map(event => dbEntryMatchJson('scrappedEvents', event)
+    .chain(ifElse(
+      // knex return emtpy array if no found
+      isEmpty,
+      // if not in db flow. Parse page then insert and return
+      compose(
+        dbInsertToTable('scrappedEvents'),
+        K(mergeLeft(event, { type: 'eventScrapped' }))
+      ),
+      K(Async.of(`${event.uri} is already saved in db`))
+    ))
+  ))
+  .chain(Async.all)
   .fork(
     tapLog('error'),
     tapLog('succes')

@@ -1,6 +1,5 @@
 const {
   Async,
-  Async: { fromPromise },
   compose,
   map,
   chain,
@@ -21,8 +20,11 @@ const {
   stringToDoc
 } = require('./helper')
 
-const knexfile = require('./db/knexfile.js')
-const knex = require('knex')(knexfile)
+const {
+  dbEntryMatchJson,
+  dbInsertToTable
+} = require('./db/utils')
+
 // const { isSameHour, getDate } = require('date-fns')
 
 const extractEventsUri = compose(
@@ -125,16 +127,6 @@ const extractUniMelbData = converge(
   ]
 )
 
-// dbEntryMatchJson :: string -> html -> {}
-const dbEntryMatchJson = table => fromPromise(
-  parsedPage => knex(table).where({ data: parsedPage })
-)
-
-// dbInsertToTable :: string -> {} -> {}
-const dbInsertToTable = table => fromPromise(
-  data => knex(table).insert(data).then(K(data))
-)
-
 // parsePage :: html -> Result e {}
 const parsePage = tryCatch(compose(
   extractUniMelbData,
@@ -147,7 +139,7 @@ const flow = pipe(
     extractEventsUri,
     map(uri => compose(httpGet, concat(DOMAIN))(uri)
       .chain(pageHtml => resultToAsync(parsePage(pageHtml))
-        .chain(parsedPage => dbEntryMatchJson('uniMelb')(parsedPage)
+        .chain(parsedPage => dbEntryMatchJson('scrappedEvents')(parsedPage)
           .bimap(error => ({error, message: "couldn't connect to db"}), identity)
           .chain(ifElse(
             // knex return emtpy array if no found
@@ -155,10 +147,11 @@ const flow = pipe(
             // if not in db flow. Parse page then insert and return
             compose(
               map(omit(['html'])),
-              dbInsertToTable('uniMelb'),
+              dbInsertToTable('scrappedEvents'),
               K({
-                uri,
+                uri: concat(DOMAIN, uri),
                 data: parsedPage,
+                type: 'eventScrapped',
                 html: pageHtml
               })
             ),

@@ -14,7 +14,8 @@
   },
   "scripts": {
     "rollback": "cd src/db/ && knex migrate:rollback",
-    "latest": "cd src/db/ && knex migrate:latest"
+    "latest": "cd src/db/ && knex migrate:latest",
+    "debug": "node --inspect-brk=0.0.0.0"
   },
   "devDependencies": {
     "eslint": "^5.9.0",
