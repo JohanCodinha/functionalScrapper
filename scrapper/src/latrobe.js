@@ -3,30 +3,20 @@ const {
   map,
   prop,
   unnest,
-  //mergeAll,
-  //converge,
-  //unapply,
   objOf,
   pickBy,
-  //pick,
   append,
   trim,
   isEmpty,
   complement,
   propEq,
-  //filter,
   isNil,
-  //reduce,
   allPass,
-  //when,
   both,
-  //merge,
   mergeLeft,
   toLower,
   or,
-  pipe,
-  ifElse,
-  identity
+  pipe
 } = require('ramda')
 
 const {
@@ -34,12 +24,8 @@ const {
   prop: mprop,
   constant: K,
   chain,
-  //curry,
-  //either,
-  //option,
   find,
-  safe,
-  bimap
+  safe
 } = require('crocks')
 
 const {
@@ -48,10 +34,7 @@ const {
 } = require('date-fns')
 
 const {
-  capitalize,
   tapLog,
-  //log,
-  //httpGet,
   $$,
   $,
   stringToDoc,
@@ -59,8 +42,7 @@ const {
 } = require('./helper')
 
 const {
-  dbEntryMatchJson,
-  dbInsertToTable
+  saveToDb
 } = require('./db/utils')
 
 const extractNextPageURL = compose(
@@ -175,27 +157,14 @@ const extractEventsData = getEventsURL('http://www.latrobe.edu.au/events/search-
         ]
       ),
       objOf('data'),
-      mergeLeft({html, uri})
+      mergeLeft({ html, uri, type: 'eventScrapped' })
     )(html))
   ))
-  .chain(Async.all)
 
+// Async e [Async]
 extractEventsData
-  // .map(x => {debugger; return x})
-  .map(map(event => dbEntryMatchJson('scrappedEvents', event)
-    .chain(ifElse(
-      // knex return emtpy array if no found
-      isEmpty,
-      // if not in db flow. Parse page then insert and return
-      compose(
-        dbInsertToTable('scrappedEvents'),
-        K(mergeLeft(event, { type: 'eventScrapped' }))
-      ),
-      K(Async.of(`${event.uri} is already saved in db`))
-    ))
-  ))
-  .chain(Async.all)
+  .chain(saveToDb)
   .fork(
     tapLog('error'),
-    tapLog('succes')
+    compose(() => process.exit(), tapLog('succes'))
   )

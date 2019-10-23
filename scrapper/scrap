@@ -1,4 +1,4 @@
 #!/bin/sh
-echo "--- $(date)" >> /var/log/scrapper/scrapper.log
-node ${WORKDIR}/src/uniMelb.js >> /var/log/scrapper/scrapper.log
-node ${WORKDIR}/src/latrobe.js >> /var/log/scrapper/scrapper.log
+echo "--- $(date)" >> /var/log/scrapper.log
+node ${WORKDIR}/src/melbUni.js >> /var/log/scrapper.log
+node ${WORKDIR}/src/latrobe.js >> /var/log/scrapper.log

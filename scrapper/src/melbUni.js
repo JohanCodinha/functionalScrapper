@@ -1,15 +1,30 @@
 const {
-  Async,
   compose,
   map,
-  chain,
   tryCatch,
   resultToAsync,
-  identity,
   pipe
 } = require('crocks')
 
-const { unnest, head, trim, prop, objOf, converge, mergeAll, concat, unapply, pathEq, filter, both, reduce, propEq, always: K, ifElse, isEmpty, propOr, omit } = require('ramda')
+const {
+  mergeLeft,
+  objOf,
+  unnest,
+  head,
+  trim,
+  prop,
+  converge,
+  mergeAll,
+  concat,
+  unapply,
+  pathEq,
+  filter,
+  both,
+  reduce,
+  propEq,
+  always:
+  propOr
+} = require('ramda')
 
 const {
   tapLog,
@@ -21,8 +36,7 @@ const {
 } = require('./helper')
 
 const {
-  dbEntryMatchJson,
-  dbInsertToTable
+  saveToDb
 } = require('./db/utils')
 
 // const { isSameHour, getDate } = require('date-fns')
@@ -133,36 +147,24 @@ const parsePage = tryCatch(compose(
   stringToDoc
 ))
 
-const flow = pipe(
+const extractEventsData = pipe(
   httpGet,
   map(pipe(
     extractEventsUri,
     map(uri => compose(httpGet, concat(DOMAIN))(uri)
-      .chain(pageHtml => resultToAsync(parsePage(pageHtml))
-        .chain(parsedPage => dbEntryMatchJson('scrappedEvents')(parsedPage)
-          .bimap(error => ({error, message: "couldn't connect to db"}), identity)
-          .chain(ifElse(
-            // knex return emtpy array if no found
-            isEmpty,
-            // if not in db flow. Parse page then insert and return
-            compose(
-              map(omit(['html'])),
-              dbInsertToTable('scrappedEvents'),
-              K({
-                uri: concat(DOMAIN, uri),
-                data: parsedPage,
-                type: 'eventScrapped',
-                html: pageHtml
-              })
-            ),
-            K(Async.of(`${uri} is already saved in db`))
-          ))
-        )
+      .chain(html => resultToAsync(parsePage(html))
+        .map(compose(
+          mergeLeft({ html, uri, type: 'eventScrapped' }),
+          objOf('data')
+        ))
       )
     )
-  )),
-  chain(Async.all)
+  )
+  )
 )
 
-flow(DOMAIN + '/all')
+const flow = extractEventsData(DOMAIN + '/all')
+  .chain(saveToDb)
+
+flow
   .fork(tapLog('error'), compose(() => process.exit(), log))
