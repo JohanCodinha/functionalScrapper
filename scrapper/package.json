@@ -4,7 +4,7 @@
   "main": "main.js",
   "license": "MIT",
   "dependencies": {
-    "axios": "^0.18.0",
+    "axios": "^0.21.1",
     "crocks": "^0.11.1",
     "date-fns": "^1.29.0",
     "jsdom": "^13.0.0",
